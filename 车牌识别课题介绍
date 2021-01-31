@@ -1,0 +1,484 @@
+ 设计任务
+ 
+    1.1设计内容及要求：
+    
+课题研究的主要内容是对数码相机拍摄的车牌，进行基于数字图像处理技术的车牌定位技术和车牌字符分割技术的研究与开发，涉及到图像预处理、车牌定位、倾斜校正、字符分割等方面的知识,总流程图如图1-1所示。
+
+
+图1-1系统总流程图
+
+1.2方案 
+
+1、车牌图像的定位。分析了车牌定位的基本原理和现有的定位方法,利用图像处理的技术,提出了基于数学形态学与边缘检测以及颜色相结合的车牌定位方法。最后对车牌定位实验结果进行分析。
+2、倾斜校正。分析了倾斜校正的基本原理和一些倾斜校正方法,并对实验结果进行分析。
+3、车牌字符分割。分析了各种字符分割算法，然后对分割出的车牌图像进行灰度化、灰度拉伸、二值化、去边框处理等一系列预处理后，提出了一种
+基于模板匹配与垂直投影相结合的字符分割方法。最后对字符分割实验结果进行了分析。
+
+一. 设计原理及设计方案
+
+  课题研究的主要内容是对数码相机拍摄的车牌，进行基于数字图像处理技术的车牌定位技术和车牌字符分割技术的研究与开发，涉及到图像预处理、车牌定位、倾斜校正、字符分割等方面的知识,总流程图如图2-1所示，其中车牌定位的流程图如图2-2所示，字符分割与归一化的流程图如图2-3所示。
+
+
+图2-1系统总流程图
+
+  
+  图2-2 车牌定位的流程图
+
+       
+   图2-3 字符分割与归一化流程图
+
+
+
+
+二. 设计的步骤和结果
+
+3.1 图像灰度变换
+
+灰度图指的是包含光亮程度，但没有色彩信息的图片，比如亮度持续变化的黑白图像就是一张灰度图。灰度变换就是将有色彩的图像转化为只有光亮度的图像。色彩图片分为R、G、B 三个量，依次对应着红、绿、蓝等三种颜色，灰度变换就是将R、G、B 三个分量变为一个等值的过程。像素点越亮的灰度值越大（显白色时像素值最大的为255），相反则越暗（显黑色时像素值为0）。要把原来的彩图变化为用灰度表示时，其图像的灰度变换的值可以用下面两个公式计算：
+
+第一个式子用的是权值加重的方法，第二个式子用的是均值法。Matlab中的R、G、B转灰度的函数rgb2gray① 使用的就是第一个式子权值加重[6]。
+对应代码实现如下：
+Scolor=imread([pn fn]);
+figure,imshow(Scolor),title('原始图像');
+Sgray = rgb2gray(Scolor);%rgb2gray转换成灰度图
+figure;imshow(Sgray);title('灰度图')
+
+3.2 图像边缘检测
+
+图像边缘是指图片的灰度空间突变或梯度上突变的全部像素组合。接下来在车牌定位与字符的识别前我们需先对图片做边缘检测处理，提升图像像素，让图像更容易接下来的后续操作。在进行完边缘检测处理之后，能在相当程度上压低噪声影响、切割出车牌区域、留下完整车牌字符，使其方便接下来的定位与识别。
+根据牌照字符识别所用的图像采集仪器基本装在固有的位置和车牌的特有属性，相对容易看出汽车车牌一般都在一个水平的长方形区域里，位置范围基本比较固定，而且牌照里的字符基本都在一水平方向上。因此，再进行一些转换，容易清晰的呈出车牌区域的边缘。本次系统设计采用了Roberts算子来对图像进行边缘检测。还有别的算法如Sobel算子和拉普拉斯算子等。  
+Roberts算子是通过对图像局部做差分处理来寻找图像边缘的，使用互为九十度角上的差分来估计梯度，Roberts算子则是采用对角方向相邻两像素之差，
+其幅值为：
+
+
+
+Robert梯度是以（x-,y-）为中心，它度量了两个点的分别两个方向上正交后发生灰度改变值，取一合适值T：判断G(x，y)>T,(x,y)为阶跃状边缘点[11]。相当于使用和对原始图像进行卷积。
+对应代码实现如下：
+grd=edge(Egray,'canny',0.09,'both');
+figure,imshow(grd);title('robert算子边缘检测');
+       
+3.3 车牌定位
+
+基于Matlab车牌识别设计与实现的关键的是牌照位置标记与车牌分割，在整幅图像中先通过合适的算法去提取图像，得到牌照的位置然后再进行平滑、灰度与二值化等处理接着再对提取出来的图片进行分割得到字符。
+定位与分割牌照和二值化处理是本次毕业设计的几个重要技术，其主要是为了将已经过前期预处理后所得到的灰度图象中车牌的区域显示出来，接着把包括车牌符号的那块区域图象从处理过的原始图象中提取出来，再由程序的子系统进行识别，要是能准确的切割出车牌的位置就能更好的提升整个程序识别的效率。而且由于车牌图片是初始图片中一个相对突出的子区域图像，简单的概况就是一个水平度比较高近似矩形的横区域图。它在原图中所占的位置相对比较集中，且其灰度值与原图的其它区域也有很大的区别，因此在其边缘就形成了一个灰度有很大变化的区域边界，这样也就有利于我们直接通过边缘检测对图象进行分割。而汽车车牌的二值化处理是字符分割方法中一个非常重要的步骤。
+实现代码如下：
+[y,x,]=size(bg2);
+I6=double(bg2);
+%绘制行曲线图
+Y1=zeros(y,1);%y行1列的零矩阵
+for i=1:y
+        for j=1:x
+            if(I6(i,j,1)==1)
+                Y1(i,1)= Y1(i,1)+1;
+            end
+        end
+end
+[temp, MaxY]=max(Y1);
+PY1=MaxY;
+while ((Y1(PY1,1)>=50)&&(PY1>1))
+    PY1=PY1-7;
+end
+PY2=MaxY;
+while ((Y1(PY2,1)>=50)&&(PY2<y))
+    PY2=PY2+7;
+end
+%绘制列曲线图
+X1=zeros(1,x);
+for j=1:x
+     for i=PY1:PY2
+            if(I6(i,j,1)==1)
+                X1(1,j)= X1(1,j)+1;
+            end
+     end
+end
+PX1=1;
+while ((X1(1,PX1)<3)&&(PX1<x))
+    PX1=PX1+1;
+end
+PX2=x;
+while ((X1(1,PX2)<3)&&(PX2>PX1))
+    PX2=PX2-1;
+end
+ 
+DW=Scolor(PY1:PY2,PX1:PX2,:);
+%subplot(1,3,3);
+figure,imshow(DW),title('车牌定位后图像');
+
+
+3.4 车牌的二值化
+
+车牌二值化处理是决定字符分割好坏非常重要的一个步骤，所谓二值化实际上就是把原图中的每个像素点的分别设置为0或255两个值，简单来说就是把整副原图转换成黑白图像。这个二值化主要是在灰度的基础上实际也就是取一个比较合适的值，将字符准确地从车牌中分割出来。过程大致就是选取一个合适的值，若当图中的哪点的灰度值大于这个值时就将该点设为最大255，反之如果图像中的某点的灰度值小于这个值的时候就将该点值设为最小0。因此，只有选取好一个合适的阈值，才能使二值化之后的图像能较好地区分出字符和车牌背景。根据实验经验得知图像最大灰度值减去图像最大灰度值与最小灰度值之差的三分之一可获得令人满意的阈值，二值化的效果较好。选取合适的阈值就能使二值化图像准确的表达图像的车牌区域与其他区域，所以二值化阈值的选取就成为了图像二值化的关键所在。
+实现的代码如下：
+figure,imshow(DW),title('车牌定位后图像');
+I1 = rgb2gray(DW);    %将RGB图像转化为灰度图像
+g_max=double(max(max(I1)));
+g_min=double(min(min(I1)));
+T=round(g_max-(g_max-g_min)/3); % T 为二值化的阈值
+[m,n]=size(I1);% d:二值图像
+imane_bw=im2bw(I1,T/256);
+figure,imshow(imane_bw),title('二值化车牌图像');
+
+
+
+3.5 字符分割、字符归一化与识别
+
+字符分割与归一化完成之后，整个系统设计就基本快要完成了，在字符分割模块中凭借之前的先验知识有的参数可以直接拿过来使用，自己基本没法轻易地推导出具体分割的算法与一些公式，一般只能依靠前人的经验，那些方法可能不是最好的或者并不具有可适用性，此次，由于毕设时间的问题还有个人的知识能力的有限只能尽力去做好去理解。其流程如下图3-4所示：
+图3-4 字符的分割与归一化
+3.5.1 字符分割
+
+字符分割可以说在整个系统里起着承前启后的作用，之前所做的所有操作都是为了能够较好地分割出车牌，而字符分割的成功与否也将决定着整个系统的最终结果的好坏。字符分割就是将二值化处理之后的车牌区域的图像进行垂直方向的投影。投影的结果会出现一个起起伏伏的波形图，然后对该波形图进行从左至右的扫描，根据波峰和波谷就能够判断出每字符所在的位置，最终将字符一一分割出来。在这里我们正常都是使用垂直投影的方法，所以我们也就需要去掉附近的白色部分，字符在竖直面上的投影都是在它们之间的空缝中并在这里取局部的最小值，我们所切割的位置需要满足牌照的字符的书写格式、样式、尺寸限制等一些要求。利用此方法能相对有效的切割出复杂环境中的车牌字符。
+
+3.5.2 字符归一化
+
+分割出字符后为了更方便于接下来的模板匹配，还需要对其进行大小归一化处理。大小归一化就是将尺寸大小不一样的字符变换成尺寸相同的字符。目前常用的主要有两个，一是缩小或放大待识别字符的外框使其变成一特定的大小；另一种则是通过分析字符在两个方向上的像素点做字符归一化，这两种方法都有不足之处，第一种对字符边缘会有较大的干扰，另一种可能让本身外形相似的字符更难以辨别。
+由于一些因素影响，经切割出来的字符大小基本都会有些区别，所以在匹配前我们必须对已切割出来的字符做特定的处理。使其与前期做的字符模板的图像大小能够一样，在做过这个处理后，字符就没有较大的出入，这就能更好的解决前面所说因素的影响，这样就更容易与模板库中的字符进行匹配识别。
+3.5.3 车牌的识别
+现在主要用于车牌字符识别的算法有两种：一种是基于字符模板匹配OCR算法，另一种是基于人工神经网络的OCR算法[8]。前种方法的基本流程为:把待识别的车牌符号做二值化操作然后再与字符库中的字符进行对比，接着将其与全部的字符库对比看是否能够相似，然后把最合适的字符做为最终识别成果。这种方法较容易实现，且就算前期获取的字符图像有出现缺损或者有污痕干扰也有较强的适应力而且也有较高的识别准确率。结合前面这几个优点我直接将选用这种算法做为此次毕设字符识别的方法。其识别字符的主要流程图3-5所示：
+实现代码如下：
+for I=1:7
+        ii=int2str(I);
+        t=imread([ii,'.jpg']);
+        t=255-t;
+        level=graythresh(t);
+        t=im2bw(t,level);
+        SegBw2=imresize(t,[22 14],'nearest');
+           if tt==1                 %第一位汉字识别
+             kmin=37;
+             kmax=72;
+             t=~t;
+             SegBw2=imresize(t,[22 14],'nearest');
+        elseif tt==2             %第二位 A~Z 字母识别
+            kmin=11;
+            kmax=36;
+           else               %第三位以后是字母或数字识别
+            kmin=1;
+            kmax=36;
+        end
+        for k2=kmin:kmax
+            fname=strcat('code module\Sam',liccode(k2),'.jpg');
+            %SamBw2 = imread(fname);
+            SamBw22 = imread(fname);
+            SamBw22 = rgb2gray(SamBw22);
+            SamBw2=imresize(SamBw22,[22 14],'nearest');
+            level=graythresh(SamBw2);
+            SamBw2=im2bw(SamBw2,level);
+            for  i=1:22
+                for j=1:14
+                    SubBw2(i,j)=SegBw2(i,j)-SamBw2(i,j);
+                end
+            end
+           % 以上相当于两幅图相减得到第三幅图
+            Dmax=0;
+            for k1=1:22
+                for l1=1:14
+                    if  ( SubBw2(k1,l1) > 0 || SubBw2(k1,l1) <0 )
+                        Dmax=Dmax+1;
+                    end
+                end
+            end
+            Error(k2)=Dmax;
+        end
+        Error1=Error(kmin:kmax);
+        MinError=min(Error1);
+        findc=find(Error1==MinError);
+        if tt==1
+            findc=findc+36;
+        end
+        if tt==2
+            findc=findc+10;
+        end
+        tt=tt+1;
+        res=liccode(findc);
+        shibiejieguo(1,l)=res;
+        l=l+1;
+end
+
+图3-5字符识别流程图
+
+在此我取用字符与模板相减的方式计算两者中那些字符相似度最高，其值为0越多证明两者越相似。接着依次输出相似度最高的字符，基本所有牌照上都只有7个字符，而且第一位基本都为汉字，是车辆所属省份的缩写，接着是大写字母与阿拉伯数字。所有的基本只有50多个汉字，26个大写字母与10个数字。此次我只设定4个汉字26个字母与10个数字的模板。设待识别字符为X，标准模板为Ti，相似度为Si，则有：
+
+
+取Si最小的为识别结果输出。
+
+
+
+
+三. 参考文献
+
+[1] 冈萨雷斯．数字图像处理（第二版）．电子工业出版社，2007．8.
+[2] 王永利，苏金明. MATLAB7.0实用指南. 北京: 电子工业出版社, 2004
+[3] 宋建才.汽车牌照识别技术研究[J].工业控制计算机,2004,44～45.
+[4] 郁梅等，基于视觉的车辆牌照检测,计算机应用研究,1999(5),P65～67
+[5] 王枚、王国宏.基于伴生与互补颜色特征的车牌字符分割技术[J].山东大学学报，2007。第37卷
+[6] 田蕾,董秀芳 MATLAB图形图像处理应用教程. 北京: 中国水利水电出版社, 2003
+[7] 朱学芳等，一种自适应细化方法，模式识别与人工智能，Vol.10，No.2，1997(6)，P140～145
+[8] 叶晨洲，杨杰，宣国荣.车辆牌照字符识别[J].上海交通大学学报，2000，5(34)： 672～675.
+[9]刘阳，伊铁源等.数字图象处理应用于车辆牌照的识别.辽宁大学学报.2004，65～68.
+[10] 刘佐濂 , 邓荣标 , 孔嘉圆.中国科技信息 [J].2005（23期）9～12.
+[11] 袁志伟，潘晓露.车辆牌照定位的算法研究[J].昆明理工大学学报，2001，26(2):  56～60
+[12] 廖金周,宣国荣. 车辆牌照的自动分割[J].微型电脑应用, 1999年07期
+[13] 刘卫国. MATLAB程序设计与应用. 北京：高等教育出版社，2002
+[14] 叶晨洲等,车辆牌照字符识别系统,计算机系统应用，1999(5)，P10～13
+[15] 李宏升等，利用牌照识别技术的停车场安全防盗系统，计算机系统应用，1999(5)，P14～16
+[16] 许志影、李晋平.MATLAB极其在图像处理中的应用.计算机与现代化，2004(4)
+
+
+四. 程序附录
+
+%获取图像   装入待处理彩色图像并显示原始图像
+[fn,pn,fi]=uigetfile('*.bmp','选择图片');
+Scolor=imread([pn fn]);
+figure,imshow(Scolor),title('原始图像');
+%将彩色图像转换为黑白并显示
+Sgray = rgb2gray(Scolor);%rgb2gray转换成灰度图
+%figure,imshow(Sgray),title('原始黑白图像');
+%c=histeq(Sgray);
+%figure,imshow(c);title('直方图均衡化图像');
+s=strel('disk',13);%strei函数13
+Bgray=imopen(Sgray,s);%打开sgray s图像
+%figure,imshow(Bgray);title('背景图像');%输出背景图像
+I3=imerode(Bgray,se);    %腐蚀图像
+figure,imshow(I3),title('腐蚀后边缘图像');
+bg1=imclose(I3,strel('rectangle',[8,18]));%取矩形框的闭运算即平滑8,18
+figure,imshow(bg1);title('图像闭运算[5,19]');%输出闭运算的图像
+bg3=imopen(bg1,strel('rectangle',[8,14]));%取矩形框的开运算8,18
+figure,imshow(bg3);title('图像开运算[5,19]');%输出开运算的图像
+bg2=bwareaopen(bg3,700);%去除聚团灰度值小于1000的部分800
+figure,imshow(bg2);title('从对象中移除小对象');
+[y,x,]=size(bg2);
+I6=double(bg2);
+%绘制行曲线图
+Y1=zeros(y,1);%y行1列的零矩阵
+for i=1:y
+        for j=1:x
+            if(I6(i,j,1)==1)
+                Y1(i,1)= Y1(i,1)+1;
+            end
+        end
+end
+% figure();
+% subplot(1,3,1);
+% plot(0:y-1,Y1),title('行像素灰度值累计'),xlabel('行值'),ylabel('像素和'); 
+[temp, MaxY]=max(Y1);
+PY1=MaxY;
+while ((Y1(PY1,1)>=50)&&(PY2>1))
+	PY1=PY1-7;
+end
+PY2=MaxY;
+while ((Y1(PY2,1)>=50)&&(PY1<y))
+	PY2=PY2+7;
+end
+%绘制列曲线图
+X1=zeros(1,x);
+for j=1:x
+     for i=PY1:PY2
+            if(I6(i,j,1)==1)
+                X1(1,j)= X1(1,j)+1;
+            end
+     end
+end
+% subplot(1,3,2);
+% plot(0:x-1,X1),title('列像素灰度值累计'),xlabel('列值'),ylabel('像数和');
+PX1=1;
+while ((X1(1,PX1)<3)&&(PX1<x))
+	PX1=PX1+1;
+end
+PX2=x;
+while ((X1(1,PX2)<3)&&(PX2>PX1))
+	PX2=PX2-1;
+end
+
+DW=Scolor(PY1:PY2,PX1:PX2,:);
+%subplot(1,3,3);
+figure,imshow(DW),title('车牌定位后图像');
+%if isrgb(DW) 
+    I1 = rgb2gray(DW);    %将RGB图像转化为灰度图像
+%else   I1=DW;
+%end
+%figure,imshow(I1),title('车牌灰度图像');
+g_max=double(max(max(I1)));
+g_min=double(min(min(I1)));
+T=round(g_max-(g_max-g_min)/3); % T 为二值化的阈值
+[m,n]=size(I1);% d:二值图像
+%h=graythresh(I1);
+imane_bw=im2bw(I1,T/256);
+figure,imshow(imane_bw),title('二值化车牌图像');
+% imane_bw=bwareaopen(I1,3);
+% figure,imshow(imane_bw),title('形态学滤波后的二值化图像');
+
+ [y1,x1,z1]=size(imane_bw);
+I3=double(imane_bw);
+TT=1;
+%%%%%%%去除图像顶端和底端的不感兴趣区域%%%%%
+Y1=zeros(y1,1);
+ for i=1:y1
+    for j=1:x1
+             if(I3(i,j,1)==1) 
+                Y1(i,1)= Y1(i,1)+1 ;
+            end  
+     end       
+ end
+Py1=1;
+Py0=1;
+while ((Y1(Py0,1)<9)&&(Py0<y1))
+      Py0=Py0+1;
+end
+Py1=Py0;
+ while((Y1(Py1,1)>=9)&&(Py1<y1))
+         Py1=Py1+1;
+ end
+I2=imane_bw(Py0:Py1,:,:);
+figure,imshow(I2),title('目标车牌区域');
+% 寻找连续有文字的块，若长度大于某阈值，则认为该块有两个字符组成，需要分割
+d=qiege(I2);
+[m,n]=size(d);
+%figure,subplot(2,1,1),imshow(d),title(n)
+k1=1;k2=1;s=sum(d);j=1;
+while j~=n
+        while s(j)==0
+             j=j+1;
+        end
+               k1=j;
+          while s(j)~=0 && j<=n-1
+               j=j+1;
+         end
+                 k2=j-1;
+       if k2-k1>=round(n/6.5)
+              [val,num]=min(sum(d(:,[k1+5:k2-5])));
+           d(:,k1+num+5)=0;  % 分割
+          end
+end
+% 再切割
+d=qiege(d);
+% 切割出 7 个字符
+y1=10;y2=0.25;flag=0;word1=[];
+while flag==0
+            [m,n]=size(d);
+        left=1;wide=0;
+        while sum(d(:,wide+1))~=0
+            wide=wide+1;
+         end
+         if wide<y1   % 认为是左侧干扰
+              d(:,[1:wide])=0;
+              d=qiege(d);
+         else
+              temp=qiege(imcrop(d,[1 1 wide m]));
+              [m,n]=size(temp);
+              all=sum(sum(temp));
+              two_thirds=sum(sum(temp([round(m/3):2*round(m/3)],:)));
+          if two_thirds/all>y2
+               flag=1;word1=temp;   % WORD 1
+             end
+              d(:,[1:wide])=0;d=qiege(d);
+          end
+end
+% 分割出第二个字符
+[word2,d]=getword(d);
+% 分割出第三个字符
+[word3,d]=getword(d);
+% 分割出第四个字符
+[word4,d]=getword(d);
+% 分割出第五个字符
+[word5,d]=getword(d);
+% 分割出第六个字符
+[word6,d]=getword(d);
+% 分割出第七个字符
+[word7,d]=getword(d);
+% figure(9),imshow(word1),title('1');
+% figure(10),imshow(word2),title('2');
+% figure(11),imshow(word3),title('3');
+% figure(12),imshow(word4),title('4');
+% figure(13),imshow(word5),title('5');
+% figure(14),imshow(word6),title('6');
+% figure(15),imshow(word7),title('7');
+[m,n]=size(word1);
+% 商用系统程序中归一化大小为 40*20,此处演示%%%%%22,14
+word1=imresize(word1,[22 14]);
+word2=imresize(word2,[22 14]);
+word3=imresize(word3,[22 14]);
+word4=imresize(word4,[22 14]);
+word5=imresize(word5,[22 14]);
+word6=imresize(word6,[22 14]);
+word7=imresize(word7,[22 14]);
+figure,
+subplot(3,7,8),imshow(word1),title('1');
+subplot(3,7,9),imshow(word2),title('2');
+subplot(3,7,10),imshow(word3),title('3');
+subplot(3,7,11),imshow(word4),title('4');
+subplot(3,7,12),imshow(word5),title('5');
+subplot(3,7,13),imshow(word6),title('6');
+subplot(3,7,14),imshow(word7),title('7');
+imwrite(word1,'1.jpg');
+imwrite(word2,'2.jpg');
+imwrite(word3,'3.jpg');
+imwrite(word4,'4.jpg');
+imwrite(word5,'5.jpg');
+imwrite(word6,'6.jpg');
+imwrite(word7,'7.jpg');
+liccode=char(['0':'9' 'A':'Z' '藏川甘赣贵桂黑沪吉济冀津晋京警兰辽领鲁蒙闽宁青琼陕使苏皖湘新学渝豫粤云浙']);  %建立自动识别字符代码表 
+tt=1;
+l=1;
+for I=1:7
+        ii=int2str(I);
+        t=imread([ii,'.jpg']);
+        t=255-t;
+        level=graythresh(t);
+        t=im2bw(t,level);
+        SegBw2=imresize(t,[22 14],'nearest');
+           if tt==1                 %第一位汉字识别
+             kmin=37;
+             kmax=72;
+             t=~t;
+             SegBw2=imresize(t,[22 14],'nearest');
+        elseif tt==2             %第二位 A~Z 字母识别
+            kmin=11;
+            kmax=36;
+           else               %第三位以后是字母或数字识别
+            kmin=1;
+            kmax=36;
+        end
+        for k2=kmin:kmax
+            fname=strcat('code module\Sam',liccode(k2),'.jpg');
+            %SamBw2 = imread(fname);
+            SamBw22 = imread(fname);
+            SamBw22 = rgb2gray(SamBw22);
+            SamBw2=imresize(SamBw22,[22 14],'nearest');
+            level=graythresh(SamBw2);
+            SamBw2=im2bw(SamBw2,level);
+            for  i=1:22
+                for j=1:14
+                    SubBw2(i,j)=SegBw2(i,j)-SamBw2(i,j);
+                end
+            end
+           % 以上相当于两幅图相减得到第三幅图
+            Dmax=0;
+            for k1=1:22
+                for l1=1:14
+                    if  ( SubBw2(k1,l1) > 0 || SubBw2(k1,l1) <0 )
+                        Dmax=Dmax+1;
+                    end
+                end
+            end
+            Error(k2)=Dmax;
+        end
+        Error1=Error(kmin:kmax);
+        MinError=min(Error1);
+        findc=find(Error1==MinError);
+        if tt==1
+            findc=findc+36;
+        end
+        if tt==2
+            findc=findc+10;
+        end
+        tt=tt+1;
+        res=liccode(findc);
+        shibiejieguo(1,l)=res;
+        l=l+1;
+end
+%=====对话框显示显示======================
+shibiejieguo
+msgbox(shibiejieguo,'识别结果');
+        
+1.[17] 魏武, 黄心汉, 张起森, 等.一种基于垂直字符边界特征的车牌定位方法,中国公路学报, 2000, (4) : 88-90
+2.
+不要自己写，要利用word来自动生成。详情请看最后一页
